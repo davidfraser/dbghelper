@@ -10,7 +10,7 @@ setup(  name="dbghelper", version=VERSION,
 	url = 'http://bitbucket.org/davidfraser/python-dbghelper',
         description = 'Simple helper for inline winpdb/pdb debugging',
         license='BSD',
-	modules=['dbg'],
+	py_modules=['dbg'],
         install_requires = ['winpdb'],
 )
 

@@ -36,8 +36,8 @@ def rpdb2_with_winpdb(depth=0):
     password = "".join(random.sample(string.letters, 10))
     f = sys._getframe(depth + 1)
     filename = rpdb2.calc_frame_path(f)
-    print >>sys.stderr, "Launching WinPDB and connecting to this session"
     if WIN_PDB_SESSION is None:
+        print >>sys.stderr, "Launching WinPDB and connecting to this session"
         pid = os.fork()
         if pid:
             WIN_PDB_SESSION = pid
@@ -45,7 +45,6 @@ def rpdb2_with_winpdb(depth=0):
         else:
             time.sleep(0.2)
             winpdb_script = "; ".join(WINPDB_SCRIPT) % {"password": password, "filename": filename}
-            print winpdb_script
             os.execl(sys.executable, "python", "-c", winpdb_script)
     else:
         rpdb2.start_embedded_debugger(password, depth=depth + 1)

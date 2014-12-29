@@ -7,6 +7,7 @@ def run():
     dbg.D()
     print "Let's try again"
     dbg.D()
+    print "We did it!"
 
 run()
 

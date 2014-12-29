@@ -9,15 +9,7 @@ import random
 import string
 import sys
 import time
-
-try:
-    import rpdb2
-except ImportError, e:
-    rpdb2 = None
-if rpdb2:
-    pdb = None
-else:
-    import pdb
+import threading
 
 WINPDB_SCRIPT = [
     "import os, sys, winpdb",
@@ -49,8 +41,58 @@ def rpdb2_with_winpdb(depth=0):
     else:
         rpdb2.start_embedded_debugger(password, depth=depth + 1)
 
-if rpdb2:
-    D = rpdb2_with_winpdb
-else:
+
+_user_pref = os.getenv('PYDBG', 'winpdb').lower()
+rpdb2 = None
+
+if _user_pref == 'winpdb':
+    try:
+        import rpdb2
+    except ImportError, e:
+        pass
+
+if rpdb2 is None:
+    import pdb
     D = pdb.set_trace
+
+    class TSPdb(pdb.Pdb):
+        tsl = threading.RLock()
+        local = threading.local()
+        def set_continue(self):
+            pdb.Pdb.set_continue(self)
+            if TSPdb.local.level:
+                while TSPdb.local.level >= 1:
+                    TSPdb.local.level -= 1
+                    TSPdb.tsl.release()
+
+        def set_quit(self):
+            pdb.Pdb.set_quit(self)
+            if TSPdb.local.level:
+                while TSPdb.local.level >= 1:
+                    TSPdb.local.level -= 1
+                    TSPdb.tsl.release()
+
+        def set_trace(self, frame=None):
+            TSPdb.tsl.acquire()
+            if not hasattr(TSPdb.local, "level"):
+                TSPdb.local.level = 0
+            TSPdb.local.level += 1
+            # repeat the pdb code so we don't get an additional level of dispatching
+            if frame is None:
+                frame = sys._getframe().f_back
+            self.reset()
+            while frame:
+                frame.f_trace = self.trace_dispatch
+                self.botframe = frame
+                frame = frame.f_back
+            self.set_step()
+            sys.settrace(self.trace_dispatch)
+
+
+    def ts_set_trace():
+        TSPdb().set_trace(sys._getframe().f_back)
+
+    tsD = ts_set_trace
+else:
+    tsD = D = rpdb2_with_winpdb
 

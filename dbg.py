@@ -10,6 +10,12 @@ import string
 import sys
 import time
 import threading
+import warnings
+
+# conditionally imported modules
+rpdb2, rpdb2_error = None, None
+pydevd, pydevd_error = None, None
+pdb, pdb_error = None, None
 
 WINPDB_SCRIPT = [
     "import os, sys, winpdb",
@@ -41,21 +47,9 @@ def rpdb2_with_winpdb(depth=0):
     else:
         rpdb2.start_embedded_debugger(password, depth=depth + 1)
 
-
-_user_pref = os.getenv('PYDBG', 'winpdb').lower()
-rpdb2 = None
-
-if _user_pref == 'winpdb':
-    try:
-        import rpdb2
-    except ImportError, e:
-        pass
-
-if rpdb2 is None:
-    import pdb
-    D = pdb.set_trace
-
+def declare_ts_pdb():
     class TSPdb(pdb.Pdb):
+        """A Thread-locked version of the pdb debugger (so it can only run in one thread at a time)"""
         tsl = threading.RLock()
         local = threading.local()
         def set_continue(self):
@@ -88,11 +82,55 @@ if rpdb2 is None:
             self.set_step()
             sys.settrace(self.trace_dispatch)
 
+def ts_pdb_set_trace():
+    """A thread-safe version of pdb.set_trace(); if called from multiple threads only one will debug at a time, until continue or quit"""
+    TSPdb().set_trace(sys._getframe().f_back)
 
-    def ts_set_trace():
-        TSPdb().set_trace(sys._getframe().f_back)
+def pydevd_set_trace():
+    """A version of pydevd.settrace that reads the host and port from pydevd_args to activate pycharm's remote debugger"""
+    args = pydevd_args
+    pydevd._set_trace_lock.acquire()
+    try:
+        pydevd._locked_settrace(host=args.host, stdoutToServer=True, stderrToServer=True, port=args.port,
+                                suspend=False, trace_only_current_thread=False,
+                                overwrite_prev_trace=False, patch_multiprocessing=False)
+    finally:
+        pydevd._set_trace_lock.release()
 
-    tsD = ts_set_trace
-else:
+_user_pref = os.getenv('PYDBG', 'winpdb').lower()
+class pydevd_args:
+    host = os.getenv("PYDEVD_HOST", "") or None
+    port = int(os.getenv("PYDEVD_PORT", "") or "5678")
+_active_debugger = None
+
+if _user_pref == 'remote_pycharm':
+    try:
+        import pydevd
+        _active_debugger = 'remote_pycharm'
+    except ImportError, pydevd_error:
+        pass
+elif _user_pref == 'winpdb':
+    try:
+        import rpdb2
+        _active_debugger = 'winpdb'
+    except ImportError, rpdb2_error:
+        pass
+else: # if _user_pref == 'pdb':
+    try:
+        import pdb
+        _active_debugger = 'pdb'
+    except ImportError, pdb_error:
+        pass
+
+if _active_debugger == 'remote_pycharm':
+    tsD = D = pydevd_set_trace
+elif _active_debugger == 'winpdb':
     tsD = D = rpdb2_with_winpdb
+elif _active_debugger == 'pdb':
+    TSPdb = declare_ts_pdb()
+    D = pdb.set_trace
+    tsD = ts_pdb_set_trace
+else:
+    D = lambda: warnings.warn("Attempt to set debugger tracepoint, but no debugger available", stacklevel=2)
+    tsD = D
 

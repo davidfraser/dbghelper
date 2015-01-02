@@ -7,7 +7,7 @@ def _read_file(fn):
     with open(fn) as f:
         return f.read()
 
-VERSION = '0.2'
+VERSION = '0.2.1'
 LONG_DESCRIPTION = _read_file(os.path.join(
     os.path.dirname(__file__),
     'README.rst'))

@@ -97,6 +97,19 @@ def pydevd_set_trace():
     finally:
         pydevd._set_trace_lock.release()
 
+def pycharm_set_trace():
+    """Tell pycharm debugger to pause here"""
+    pydevd._set_trace_lock.acquire()
+    try:
+        if not pydevd.connected:
+            warnings.warn("Call to dbg.D with pycharm as debugger, but not running in debug mode")
+            return
+        pydevd._locked_settrace(host='', stdoutToServer=True, stderrToServer=True, port=None,
+                                suspend=False, trace_only_current_thread=False,
+                                overwrite_prev_trace=False, patch_multiprocessing=False)
+    finally:
+        pydevd._set_trace_lock.release()
+
 _user_pref = os.getenv('PYDBG', 'winpdb').lower()
 class pydevd_args:
     host = os.getenv("PYDEVD_HOST", "") or None
@@ -107,6 +120,12 @@ if _user_pref == 'remote_pycharm':
     try:
         import pydevd
         _active_debugger = 'remote_pycharm'
+    except ImportError, pydevd_error:
+        pass
+elif _user_pref == 'pycharm':
+    try:
+        import pydevd
+        _active_debugger = 'pycharm'
     except ImportError, pydevd_error:
         pass
 elif _user_pref == 'winpdb':
@@ -124,6 +143,10 @@ else: # if _user_pref == 'pdb':
 
 if _active_debugger == 'remote_pycharm':
     tsD = D = pydevd_set_trace
+elif _active_debugger == 'pycharm':
+    if not pydevd.connected:
+        warnings.warn("dbg.D has pycharm configured as debugger, but process not running in debug mode")
+    tsD = D = pycharm_set_trace
 elif _active_debugger == 'winpdb':
     tsD = D = rpdb2_with_winpdb
 elif _active_debugger == 'pdb':

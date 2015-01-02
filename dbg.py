@@ -99,16 +99,18 @@ def pydevd_set_trace():
 
 def pycharm_set_trace():
     """Tell pycharm debugger to pause here"""
-    pydevd._set_trace_lock.acquire()
-    try:
-        if not pydevd.connected:
-            warnings.warn("Call to dbg.D with pycharm as debugger, but not running in debug mode")
-            return
-        pydevd._locked_settrace(host='', stdoutToServer=True, stderrToServer=True, port=None,
-                                suspend=False, trace_only_current_thread=False,
-                                overwrite_prev_trace=False, patch_multiprocessing=False)
-    finally:
-        pydevd._set_trace_lock.release()
+    debugger = pydevd.GetGlobalDebugger()
+    if debugger is None:
+        warnings.warn("Tracepoint from dbg.D ignored as pycharm not running in debug mode", stacklevel=2)
+        return
+    debugger.SetTraceForFrameAndParents(pydevd.GetFrame(), False)
+    # Trace future threads
+    debugger.patch_threads()
+    thread = threading.current_thread()
+    if not hasattr(thread, "additionalInfo"):
+        thread.additionalInfo = pydevd.PyDBAdditionalThreadInfo()
+    pydevd.pydevd_tracing.SetTrace(debugger.trace_dispatch)
+    debugger.setSuspend(thread, pydevd.CMD_THREAD_SUSPEND)
 
 _user_pref = os.getenv('PYDBG', 'winpdb').lower()
 class pydevd_args:

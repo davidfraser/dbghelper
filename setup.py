@@ -3,10 +3,14 @@
 import os
 from setuptools import setup
 
+def _read_file(fn):
+    with open(fn) as f:
+        return f.read()
+
 VERSION = '0.2'
-LONG_DESCRIPTION = os.path.join(
+LONG_DESCRIPTION = _read_file(os.path.join(
     os.path.dirname(__file__),
-    'README.rst')
+    'README.rst'))
 
 setup(
     name="dbghelper",

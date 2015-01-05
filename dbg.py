@@ -4,6 +4,7 @@
     import dbg ; dbg.D()
 """
 
+import copy
 import os
 import random
 import string
@@ -86,41 +87,61 @@ def ts_pdb_set_trace():
     """A thread-safe version of pdb.set_trace(); if called from multiple threads only one will debug at a time, until continue or quit"""
     TSPdb().set_trace(sys._getframe().f_back)
 
-def pydevd_set_trace():
-    """A version of pydevd.settrace that reads the host and port from pydevd_args to activate pycharm's remote debugger"""
-    args = pydevd_args
+pydevd_set_trace = None
+
+def pycharm_set_trace():
+    """Tell pycharm debugger to pause here (when running locally inside pycharm, already connected to pydevd)"""
     pydevd._set_trace_lock.acquire()
     try:
-        pydevd._locked_settrace(host=args.host, stdoutToServer=True, stderrToServer=True, port=args.port,
-                                suspend=False, trace_only_current_thread=False,
-                                overwrite_prev_trace=False, patch_multiprocessing=False)
+        debugger = pydevd.GetGlobalDebugger()
+        if debugger is None:
+            warnings.warn("Tracepoint from dbg.D ignored as pycharm not running in debug mode", stacklevel=2)
+            return
+        debugger.SetTraceForFrameAndParents(pydevd.GetFrame(), False)
+        # Trace future threads
+        debugger.patch_threads()
+        thread = threading.current_thread()
+        if not hasattr(thread, "additionalInfo"):
+            thread.additionalInfo = pydevd.PyDBAdditionalThreadInfo()
+        pydevd.pydevd_tracing.SetTrace(debugger.trace_dispatch)
+        debugger.setSuspend(thread, pydevd.CMD_THREAD_SUSPEND)
     finally:
         pydevd._set_trace_lock.release()
 
-def pycharm_set_trace():
-    """Tell pycharm debugger to pause here"""
-    debugger = pydevd.GetGlobalDebugger()
-    if debugger is None:
-        warnings.warn("Tracepoint from dbg.D ignored as pycharm not running in debug mode", stacklevel=2)
-        return
-    debugger.SetTraceForFrameAndParents(pydevd.GetFrame(), False)
-    # Trace future threads
-    debugger.patch_threads()
-    thread = threading.current_thread()
-    if not hasattr(thread, "additionalInfo"):
-        thread.additionalInfo = pydevd.PyDBAdditionalThreadInfo()
-    pydevd.pydevd_tracing.SetTrace(debugger.trace_dispatch)
-    debugger.setSuspend(thread, pydevd.CMD_THREAD_SUSPEND)
 
 _user_pref = os.getenv('PYDBG', 'winpdb').lower()
-class pydevd_args:
-    host = os.getenv("PYDEVD_HOST", "") or None
-    port = int(os.getenv("PYDEVD_PORT", "") or "5678")
+class _pydevd_args_type(object):
+    _host = os.getenv("PYDEVD_HOST", "") or None
+    _port = int(os.getenv("PYDEVD_PORT", "") or "5678")
+    @property
+    def host(self):
+        return getattr(self, "_host")
+    @host.setter
+    def set_host(self, new_host):
+        self._host = new_host
+        self._update_defaults()
+
+    @property
+    def port(self):
+        return self._port
+    @port.setter
+    def set_port(self, new_port):
+        self._port = new_port
+        self._update_defaults()
+
+    def update_defaults(self):
+        if pydevd_set_trace is not None:
+            pydevd_set_trace.func_defaults = (self._host, True, True, self._port, True, False, False, False)
+
+pydevd_args = _pydevd_args_type()
+del _pydevd_args_type
 _active_debugger = None
 
 if _user_pref == 'remote_pycharm':
     try:
         import pydevd
+        pydevd_set_trace = copy.copy(pydevd.settrace)
+        pydevd_args.update_defaults()
         _active_debugger = 'remote_pycharm'
     except ImportError, pydevd_error:
         pass

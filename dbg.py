@@ -137,7 +137,7 @@ pydevd_args = _pydevd_args_type()
 del _pydevd_args_type
 _active_debugger = None
 
-if _user_pref == 'remote_pycharm':
+if _user_pref == 'pydevd':
     try:
         import pydevd
         pydevd_set_trace = copy.copy(pydevd.settrace)

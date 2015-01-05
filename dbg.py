@@ -87,9 +87,9 @@ def ts_pdb_set_trace():
     """A thread-safe version of pdb.set_trace(); if called from multiple threads only one will debug at a time, until continue or quit"""
     TSPdb().set_trace(sys._getframe().f_back)
 
-pydevd_set_trace = None
+pydevd_remote_set_trace = None
 
-def pycharm_set_trace():
+def pydevd_local_set_trace():
     """Tell pycharm debugger to pause here (when running locally inside pycharm, already connected to pydevd)"""
     pydevd._set_trace_lock.acquire()
     try:
@@ -109,7 +109,7 @@ def pycharm_set_trace():
         pydevd._set_trace_lock.release()
 
 
-_user_pref = os.getenv('PYDBG', 'winpdb').lower()
+_user_pref = os.getenv('PYDBG', 'pdb').lower()
 class _pydevd_args_type(object):
     _host = os.getenv("PYDEVD_HOST", "") or None
     _port = int(os.getenv("PYDEVD_PORT", "") or "5678")
@@ -130,25 +130,28 @@ class _pydevd_args_type(object):
         self._update_defaults()
 
     def update_defaults(self):
-        if pydevd_set_trace is not None:
-            pydevd_set_trace.func_defaults = (self._host, True, True, self._port, True, False, False, False)
+        if pydevd_remote_set_trace is not None:
+            pydevd_remote_set_trace.func_defaults = (self._host, True, True, self._port, True, False, False, False)
 
 pydevd_args = _pydevd_args_type()
 del _pydevd_args_type
 _active_debugger = None
 
-if _user_pref == 'pydevd':
+if _user_pref.replace("_local", "").replace("_remote", "") in ('pycharm', 'pydevd'):
     try:
         import pydevd
-        pydevd_set_trace = copy.copy(pydevd.settrace)
+        pydevd_remote_set_trace = copy.copy(pydevd.settrace)
         pydevd_args.update_defaults()
-        _active_debugger = 'remote_pycharm'
-    except ImportError, pydevd_error:
-        pass
-elif _user_pref == 'pycharm':
-    try:
-        import pydevd
-        _active_debugger = 'pycharm'
+        if _user_pref.endswith("_local"):
+            _active_debugger = 'pydevd_local'
+        elif _user_pref.endswith("_remote"):
+            _active_debugger = 'pydevd_remote'
+        else:
+            # this is unspecified local/remote - detect if already locally imported otherwise assume remote
+            if pydevd.connected:
+                _active_debugger = 'pydevd_local'
+            else:
+                _active_debugger = 'pydevd_remote'
     except ImportError, pydevd_error:
         pass
 elif _user_pref == 'winpdb':
@@ -157,19 +160,19 @@ elif _user_pref == 'winpdb':
         _active_debugger = 'winpdb'
     except ImportError, rpdb2_error:
         pass
-else: # if _user_pref == 'pdb':
+elif _user_pref == 'pdb':
     try:
         import pdb
         _active_debugger = 'pdb'
     except ImportError, pdb_error:
         pass
 
-if _active_debugger == 'remote_pycharm':
-    tsD = D = pydevd_set_trace
-elif _active_debugger == 'pycharm':
+if _active_debugger == 'pydevd_remote':
+    tsD = D = pydevd_remote_set_trace
+elif _active_debugger == 'pydevd_local':
     if not pydevd.connected:
         warnings.warn("dbg.D has pycharm configured as debugger, but process not running in debug mode")
-    tsD = D = pycharm_set_trace
+    tsD = D = pydevd_local_set_trace
 elif _active_debugger == 'winpdb':
     tsD = D = rpdb2_with_winpdb
 elif _active_debugger == 'pdb':

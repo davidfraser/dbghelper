@@ -152,19 +152,19 @@ if _user_pref.replace("_local", "").replace("_remote", "") in ('pycharm', 'pydev
                 _active_debugger = 'pydevd_local'
             else:
                 _active_debugger = 'pydevd_remote'
-    except ImportError, pydevd_error:
+    except ImportError as pydevd_error:
         pass
 elif _user_pref == 'winpdb':
     try:
         import rpdb2
         _active_debugger = 'winpdb'
-    except ImportError, rpdb2_error:
+    except ImportError as rpdb2_error:
         pass
 elif _user_pref == 'pdb':
     try:
         import pdb
         _active_debugger = 'pdb'
-    except ImportError, pdb_error:
+    except ImportError as pdb_error:
         pass
 
 if _active_debugger == 'pydevd_remote':

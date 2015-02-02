@@ -117,17 +117,17 @@ class _pydevd_args_type(object):
     def host(self):
         return getattr(self, "_host")
     @host.setter
-    def set_host(self, new_host):
+    def host(self, new_host):
         self._host = new_host
-        self._update_defaults()
+        self.update_defaults()
 
     @property
     def port(self):
         return self._port
     @port.setter
-    def set_port(self, new_port):
+    def port(self, new_port):
         self._port = new_port
-        self._update_defaults()
+        self.update_defaults()
 
     def update_defaults(self):
         if pydevd_remote_set_trace is not None:

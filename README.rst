@@ -37,7 +37,7 @@ Inserting a tracepoint
 Call ``dbg.D()`` to insert a tracepoint in the code; the appropriate debugger should launch when that line of code
 is executed, ready to execute the following line.
 
-A thread-safe version ``dbg.tsD()``is also supported. This is only different when using ``pdb``; in that case multiple
+A thread-safe version ``dbg.tsD()`` is also supported. This is only different when using ``pdb``; in that case multiple
 threads having tracepoints (for example, in a web server) can cause confusion as multiple debug sessions get attached
 to the same console. The ``tsD`` implementation uses a lock to only allow one debug session to use the console at once;
 other sessions are not allowed the lock until the debug interaction is finished (e.g. typing ``c`` for continue).
